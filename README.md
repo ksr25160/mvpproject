@@ -32,6 +32,9 @@ COSMOS_ENDPOINT=https://your-cosmos.documents.azure.com:443/
 COSMOS_KEY=your_cosmos_key
 ```
 
+3. **General Settings**에서 시작 명령 설정:
+   - **Startup Command**: `python main.py`
+
 ⚠️ **중요**: `.env` 파일은 절대 GitHub에 업로드하지 마세요!
 
 ---

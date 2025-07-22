@@ -18,11 +18,22 @@ setup_logger()
 logger = get_logger(__name__)
 
 logger.info(f"Starting Meeting AI Application in {config.environment.value} environment")
-logger.info(f"Python version: {sys.version}")
-logger.info(f"Python path: {sys.path}")
 logger.info(f"Current working directory: {os.getcwd()}")
-logger.info(f"Available environment variables: PORT={os.getenv('PORT')}, WEBSITES_PORT={os.getenv('WEBSITES_PORT')}, WEBSITE_PORT={os.getenv('WEBSITE_PORT')}")
-logger.info(f"Directory contents: {os.listdir('.')}")
+
+# Azure 환경에서만 자세한 디버그 정보 출력
+if config.is_azure():
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Environment variables: PORT={os.getenv('PORT')}")
+    
+    # App file 존재 확인
+    app_file = current_dir / "app" / "app.py"
+    logger.info(f"App file exists: {app_file.exists()}")
+    if not app_file.exists():
+        logger.error(f"Critical: app/app.py not found at {app_file}")
+        if (current_dir / "app").exists():
+            logger.info(f"App directory contents: {os.listdir(current_dir / 'app')}")
+        else:
+            logger.error("App directory does not exist!")
 
 def main():
     """메인 애플리케이션 실행"""

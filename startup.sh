@@ -1,43 +1,21 @@
 #!/bin/bash
-# Azure App Service Startup Script for Streamlit Application
+# Azure App Service Startup Script (Backup/Debug only)
+# Main startup is handled by Azure Portal "python main.py" command
 
-echo "Starting Meeting AI Application..."
+echo "Startup script - This is a backup/debug script"
+echo "Main startup should be handled by Azure Portal startup command: python main.py"
 echo "Current directory: $(pwd)"
 echo "Directory contents: $(ls -la)"
 
-# Install any additional dependencies if needed
-pip install --no-cache-dir -r requirements.txt
+# Set basic environment variables
+export PYTHONPATH="/home/site/wwwroot:$PYTHONPATH"
+export PORT=${PORT:-8000}
 
-# Create logs directory if it doesn't exist
-mkdir -p logs
-
-# Set environment variables for Streamlit
-export STREAMLIT_SERVER_PORT=${PORT:-8000}
-export STREAMLIT_SERVER_ADDRESS=0.0.0.0
-export STREAMLIT_SERVER_HEADLESS=true
-export STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-export STREAMLIT_SERVER_ENABLE_CORS=false
-export STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
-
-# Azure-specific environment variables
-export WEBSITES_PORT=${PORT:-8000}
-export WEBSITE_PORT=${PORT:-8000}
-
-# Add Python path
-export PYTHONPATH="${PYTHONPATH}:/home/site/wwwroot"
-
-# Change to application directory
-cd /home/site/wwwroot
-
-# Check if app/app.py exists
-if [ -f "app/app.py" ]; then
-    echo "Found app/app.py, starting Streamlit on port $STREAMLIT_SERVER_PORT..."
-    streamlit run app/app.py --server.port=$STREAMLIT_SERVER_PORT --server.address=$STREAMLIT_SERVER_ADDRESS --server.headless=true --browser.gatherUsageStats=false
-elif [ -f "main.py" ]; then
-    echo "Found main.py, starting with Python on port $STREAMLIT_SERVER_PORT..."
+# If called directly, run main.py
+if [ "$1" = "--run" ]; then
+    echo "Running main.py as backup..."
     python main.py
 else
-    echo "No main application file found. Available files:"
-    ls -la
-    exit 1
+    echo "Use: $0 --run to execute as backup"
+    echo "Normal startup should use Azure Portal startup command"
 fi

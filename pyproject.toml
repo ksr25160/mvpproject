@@ -5,8 +5,6 @@ requires = ["setuptools", "wheel"]
 name = "meeting-ai-assistant"
 version = "1.0.0"
 description = "Azure-based Meeting AI Assistant"
-
-[tool.azure]
-runtime = "python"
-version = "3.11"
-startup-file = "main.py"
+authors = [{name = "Meeting AI Team"}]
+readme = "README.md"
+requires-python = ">=3.11"
