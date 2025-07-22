@@ -19,11 +19,20 @@ class Config:
     def __init__(self):
         self.environment = self._detect_environment()
         self.settings = self._load_settings()
-    
     def _detect_environment(self) -> Environment:
         """현재 실행 환경 감지"""
-        # Azure App Service 환경 감지
-        if os.getenv("WEBSITE_SITE_NAME") or os.getenv("APPSETTING_WEBSITE_SITE_NAME"):
+        # Azure App Service 환경 감지 - 더 포괄적인 체크
+        azure_indicators = [
+            "WEBSITE_SITE_NAME",
+            "APPSETTING_WEBSITE_SITE_NAME", 
+            "WEBSITES_PORT",
+            "WEBSITE_PORT",
+            "SCM_DO_BUILD_DURING_DEPLOYMENT",
+            "WEBSITE_INSTANCE_ID",
+            "WEBSITE_HOSTNAME"
+        ]
+        
+        if any(os.getenv(indicator) for indicator in azure_indicators):
             return Environment.AZURE
         
         # 개발 환경 확인

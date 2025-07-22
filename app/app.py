@@ -81,6 +81,40 @@ def load_custom_css():
         border-radius: 5px;
         border: 1px solid #f5c6cb;
     }
+    
+    /* 챗봇 관련 스타일 */
+    .stChatMessage {
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+    
+    .stChatMessage[data-testid="chat-message-assistant"] {
+        background: #f8f9fa;
+        border-radius: 10px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .stChatMessage[data-testid="chat-message-user"] {
+        background: #e3f2fd;
+        border-radius: 10px;
+        border: 1px solid #bbdefb;
+    }
+    
+    /* 채팅 입력창 스타일 개선 */
+    .stChatInput {
+        border-radius: 10px;
+        border: 2px solid #667eea;
+    }
+    
+    /* 파일 업로드 아이콘 스타일 */
+    .uploaded-file {
+        background: #fff3cd;
+        color: #856404;
+        padding: 0.5rem;
+        border-radius: 5px;
+        border: 1px solid #ffeaa7;
+        margin: 0.5rem 0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -294,7 +328,7 @@ def process_text_input(text_input: str) -> str:
         return f"텍스트 분석 중 오류가 발생했습니다: {str(e)}"
 
 def display_main_interface(services: Dict):
-    """메인 사용자 인터페이스 표시"""
+    """메인 사용자 인터페이스 표시 - 탭 기반 + 챗봇"""
     
     # 헤더
     st.markdown("""
@@ -304,98 +338,46 @@ def display_main_interface(services: Dict):
     </div>
     """, unsafe_allow_html=True)
     
-    # 사이드바 - 기능 선택
-    with st.sidebar:
-        st.header("🔧 기능 선택")
-        
-        # 환경 정보 표시
-        st.info(f"""
-        **환경**: {config.environment.value}  
-        **세션**: {st.session_state.session_id}  
-        **시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-        """)
-        
-        feature = st.selectbox(
-            "사용할 기능을 선택하세요",
-            ["텍스트 분석", "파일 업로드", "회의 기록 조회", "작업 항목 관리"],
-            key="feature_selection"
-        )
-        
-        # 로그 레벨 설정 (개발 환경에서만)
-        if config.is_development():
-            st.header("🐛 디버그 옵션")
-            log_level = st.selectbox(
-                "로그 레벨",
-                ["INFO", "DEBUG", "WARNING", "ERROR"],
-                index=0
+    # 메인 레이아웃: 왼쪽은 기존 기능, 오른쪽은 챗봇
+    col_main, col_chat = st.columns([2, 1])
+    
+    with col_main:
+        # 사이드바 - 기능 선택
+        with st.sidebar:
+            st.header("🔧 기능 선택")
+            
+            # 환경 정보 표시
+            st.info(f"""
+            **환경**: {config.environment.value}  
+            **세션**: {st.session_state.session_id}  
+            **시간**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}            """)
+            
+            feature = st.selectbox(
+                "사용할 기능을 선택하세요",
+                ["파일 업로드", "회의 기록 조회", "작업 항목 관리"],
+                key="feature_selection"
             )
+            
+            # 로그 레벨 설정 (개발 환경에서만)
+            if config.is_development():
+                st.header("🐛 디버그 옵션")
+                log_level = st.selectbox(
+                    "로그 레벨",
+                    ["INFO", "DEBUG", "WARNING", "ERROR"],
+                    index=0                )
+        
+        # 메인 콘텐츠 영역 - 탭 기반 기능들
+        if feature == "파일 업로드":
+            display_file_upload_tab(services)
+        elif feature == "회의 기록 조회":
+            display_meeting_records_tab(services)
+        elif feature == "작업 항목 관리":
+            display_action_items_tab(services)
     
-    # 메인 콘텐츠 영역
-    if feature == "텍스트 분석":
-        display_text_analysis_tab(services)
-    elif feature == "파일 업로드":
-        display_file_upload_tab(services)
-    elif feature == "회의 기록 조회":
-        display_meeting_records_tab(services)
-    elif feature == "작업 항목 관리":
-        display_action_items_tab(services)
-
-def display_text_analysis_tab(services: Dict):
-    """텍스트 분석 탭 표시"""
-    
-    st.markdown("""
-    <div class="feature-card">
-        <h3>📝 텍스트 분석</h3>
-        <p>회의 내용을 입력하면 AI가 자동으로 분석하여 주요 내용과 작업 항목을 추출합니다.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # 텍스트 입력
-    text_input = st.text_area(
-        "회의 내용을 입력하세요",
-        height=300,
-        placeholder="예: 오늘 프로젝트 회의에서 다음과 같은 내용들이 논의되었습니다...",
-        key="text_input"
-    )
-    
-    col1, col2 = st.columns([1, 4])
-    
-    with col1:
-        analyze_button = st.button("🔍 분석하기", type="primary", key="analyze_text")
-    
-    with col2:
-        if text_input:
-            st.info(f"입력된 텍스트: {len(text_input)}자")
-    
-    # 분석 실행
-    if analyze_button and text_input:
-        if len(text_input.strip()) < 10:
-            st.warning("분석하기에는 너무 짧은 텍스트입니다. 최소 10자 이상 입력해주세요.")
-        else:
-            with st.spinner("AI가 회의 내용을 분석하고 있습니다..."):
-                result = process_text_input(text_input)
-                
-                if isinstance(result, str) and "오류" in result:
-                    st.markdown(f"""
-                    <div class="error-message">
-                        <strong>❌ 분석 실패</strong><br>
-                        {result}
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div class="success-message">
-                        <strong>✅ 분석 완료</strong><br>
-                        AI 분석이 성공적으로 완료되었습니다.
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # 결과 표시
-                    if isinstance(result, dict):
-                        display_analysis_results(result)
-                    else:
-                        st.write("**분석 결과:**")
-                        st.write(result)
+    with col_chat:
+        # 오른쪽 챗봇 인터페이스
+        st.header("💬 AI 챗봇")
+        display_chat_interface(services)
 
 def display_file_upload_tab(services: Dict):
     """파일 업로드 탭 표시"""
@@ -558,8 +540,7 @@ def display_action_items_tab(services: Dict):
             
             with col3:
                 st.metric("평균/회의", f"{len(all_action_items)/len(meetings):.1f}" if meetings else "0")
-            
-            # 작업 항목 목록
+              # 작업 항목 목록
             for i, item in enumerate(all_action_items):
                 with st.expander(f"📝 작업 항목 {i+1}: {item.get('description', 'No description')[:50]}..."):
                     st.write("**설명:**", item.get('description', 'N/A'))
@@ -630,6 +611,220 @@ def display_analysis_results(analysis: Dict):
             {"analysis_keys": list(analysis.keys()) if isinstance(analysis, dict) else "not_dict"}
         )
         st.error("분석 결과 표시 중 오류가 발생했습니다.")
+
+def display_chat_interface(services: Dict):
+    """챗봇 인터페이스 표시 (오른쪽 컬럼용 간소화 버전)"""
+    
+    # 채팅 히스토리 초기화
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {
+                "role": "assistant", 
+                "content": "안녕하세요! Meeting AI Assistant 챗봇입니다. 🤖\n\n어떻게 도와드릴까요?\n\n- 📝 회의 내용 텍스트 분석\n- 📁 파일 업로드 및 분석\n- 📋 회의 기록 조회\n- ✅ 작업 항목 관리"
+            }
+        ]
+    
+    # 채팅 메시지 표시 (높이 제한)
+    with st.container():
+        st.markdown("### 💬 AI 챗봇")
+        
+        # 메시지 컨테이너 (스크롤 가능)
+        message_container = st.container()
+        with message_container:
+            for message in st.session_state.chat_messages[-5:]:  # 최근 5개 메시지만 표시
+                with st.chat_message(message["role"]):
+                    if message["role"] == "assistant" and "analysis_result" in message:
+                        st.markdown(message["content"])
+                        if isinstance(message["analysis_result"], dict):
+                            with st.expander("분석 결과 보기"):
+                                display_analysis_results(message["analysis_result"])
+                    else:
+                        st.markdown(message["content"])
+    
+    # 파일 업로드 (챗봇과 별도)
+    with st.expander("📎 파일 업로드", expanded=False):
+        allowed_extensions = config.get("file_upload.allowed_extensions", [".pdf", ".docx", ".txt", ".wav", ".mp3"])
+        uploaded_file = st.file_uploader(
+            "분석할 파일을 선택하세요",
+            type=[ext.lstrip('.') for ext in allowed_extensions],
+            key="chat_file_upload"
+        )
+        
+        if uploaded_file is not None:
+            if st.button("📤 파일 분석하기", key="chat_analyze_file"):
+                with st.spinner(f"'{uploaded_file.name}' 파일을 처리하고 있습니다..."):
+                    result = process_uploaded_file(uploaded_file)
+                    
+                    # 파일 처리 결과를 채팅에 추가
+                    user_msg = f"파일을 업로드했습니다: {uploaded_file.name}"
+                    st.session_state.chat_messages.append({"role": "user", "content": user_msg})
+                    
+                    if "오류" in result or "실패" in result:
+                        response_msg = f"❌ 파일 처리 실패: {result}"
+                    else:
+                        response_msg = f"✅ 파일 처리 완료: {uploaded_file.name}"
+                        
+                    st.session_state.chat_messages.append({
+                        "role": "assistant", 
+                        "content": response_msg
+                    })
+                    st.rerun()
+    
+    # 챗봇 입력 처리 (파일 업로드 기능 제거)
+    chat_prompt = st.chat_input(
+        "회의 내용을 입력하거나 질문을 입력하세요",
+        key="chat_input"
+    )
+    
+    if chat_prompt:
+        # 사용자 메시지 추가
+        st.session_state.chat_messages.append({"role": "user", "content": chat_prompt})
+        
+        # 사용자 메시지 표시
+        with st.chat_message("user"):
+            st.markdown(chat_prompt)
+        
+        # AI 응답 생성
+        with st.chat_message("assistant"):
+            response_content = handle_text_input_response(chat_prompt, services)
+            
+            st.markdown(response_content["content"])
+            
+            # 분석 결과가 있으면 구조화하여 표시
+            if "analysis_result" in response_content:
+                with st.expander("분석 결과 보기"):
+                    display_analysis_results(response_content["analysis_result"])
+            
+            # 응답을 세션에 저장
+            st.session_state.chat_messages.append(response_content)
+
+def handle_text_input_response(user_input: str, services: Dict) -> Dict:
+    """텍스트 입력에 대한 AI 응답 처리"""
+    start_time = time.time()
+    
+    try:
+        # 간단한 키워드 기반 응답
+        user_input_lower = user_input.lower()
+        
+        if any(keyword in user_input_lower for keyword in ['안녕', 'hello', '도움', 'help']):
+            return {
+                "role": "assistant",
+                "content": "안녕하세요! 다음과 같은 기능을 제공합니다:\n\n📝 **텍스트 분석**: 회의 내용을 직접 입력하여 분석\n📁 **파일 업로드**: 문서나 음성 파일 업로드 및 분석\n📋 **회의 기록 조회**: 이전 분석 결과 조회\n✅ **작업 항목 관리**: 할당된 작업 확인 및 관리\n\n회의 내용을 입력하시면 바로 분석해드립니다!"
+            }
+        
+        elif len(user_input) > 20:  # 텍스트 분석을 위한 최소 길이 (기존 50자에서 20자로 줄임)
+            # 회의 내용으로 판단되는 경우 자동 분석
+            try:
+                analysis_result = process_text_input(user_input)
+                
+                if isinstance(analysis_result, dict):
+                    return {
+                        "role": "assistant",
+                        "content": "회의 내용을 분석했습니다. 분석 결과를 확인해보세요! 📊",
+                        "analysis_result": analysis_result
+                    }
+                else:
+                    return {
+                        "role": "assistant",
+                        "content": f"📝 **분석 결과**\n\n{analysis_result}"
+                    }
+            except Exception as e:
+                return {
+                    "role": "assistant",
+                    "content": f"분석 중 오류가 발생했습니다: {str(e)}\n\n다시 시도해보시거나 더 자세한 내용을 입력해 주세요."
+                }
+        
+        elif any(keyword in user_input_lower for keyword in ['회의', '분석', 'meeting']):
+            return {
+                "role": "assistant",
+                "content": "회의 내용 분석을 위해서는 더 자세한 내용을 입력해 주세요. (최소 20자 이상)\n\n예시:\n- 오늘 프로젝트 회의에서 논의된 내용들...\n- 마케팅 팀 회의 결과...\n- 개발팀 스프린트 리뷰 내용..."
+            }
+        
+        elif any(keyword in user_input_lower for keyword in ['기록', '조회', '히스토리']):
+            try:
+                meetings = get_meetings()
+                if meetings:
+                    meeting_list = "\n".join([f"• {meeting.get('title', 'Unknown')}: {meeting.get('created_at', 'Unknown')[:16]}" for meeting in meetings[:5]])
+                    return {
+                        "role": "assistant",
+                        "content": f"최근 회의 기록입니다:\n\n{meeting_list}\n\n더 자세한 정보는 '회의 기록 조회' 탭을 이용해주세요."
+                    }
+                else:
+                    return {
+                        "role": "assistant",
+                        "content": "아직 저장된 회의 기록이 없습니다."
+                    }
+            except Exception as e:
+                return {
+                    "role": "assistant",
+                    "content": f"회의 기록 조회 중 오류가 발생했습니다: {str(e)}"
+                }
+        
+        else:
+            # OpenAI 서비스를 통한 일반적인 질문 응답
+            try:
+                ai_response = ask_question(user_input)
+                return {
+                    "role": "assistant",
+                    "content": ai_response
+                }
+            except Exception as e:
+                return {
+                    "role": "assistant",
+                    "content": "죄송합니다. 현재 AI 서비스에 문제가 있습니다. 왼쪽의 기능 탭들을 이용해보시거나, 다시 시도해 주세요."
+                }
+        
+        duration = time.time() - start_time
+        logger.log_performance("chat_response", duration, {
+            "user_input_length": len(user_input),
+            "response_type": "text_analysis" if "분석" in user_input_lower else "general"
+        })
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.log_error_with_context(
+            "Failed to handle text input response",
+            e,
+            {
+                "session_id": st.session_state.session_id,
+                "user_input_length": len(user_input),
+                "duration": duration
+            }
+        )
+        return {
+            "role": "assistant",
+            "content": f"처리 중 오류가 발생했습니다: {str(e)}"
+        }
+
+def handle_file_upload_response(files_processed: List) -> Dict:
+    """파일 업로드 결과에 대한 응답 처리"""
+    
+    success_files = []
+    error_files = []
+    
+    for filename, result in files_processed:
+        if "오류" in result or "실패" in result:
+            error_files.append(f"❌ {filename}: {result}")
+        else:
+            success_files.append(f"✅ {filename}: 처리 완료")
+    
+    response_parts = []
+    
+    if success_files:
+        response_parts.append("**성공적으로 처리된 파일:**")
+        response_parts.extend(success_files)
+    
+    if error_files:
+        response_parts.append("**처리 실패한 파일:**")
+        response_parts.extend(error_files)
+    
+    if not success_files and not error_files:
+        response_parts.append("파일 처리 결과를 확인할 수 없습니다.")
+    
+    return {
+        "role": "assistant",
+        "content": "\n".join(response_parts)
+    }
 
 def display_footer():
     """푸터 정보 표시"""

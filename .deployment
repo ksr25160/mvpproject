@@ -1,0 +1,6 @@
+{
+  "runtimeVersion": "3.11",
+  "startupFile": "main.py",
+  "defaultDocuments": [],
+  "linuxFxVersion": "PYTHON|3.11"
+}

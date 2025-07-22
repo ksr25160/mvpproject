@@ -19,6 +19,10 @@ export STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 export STREAMLIT_SERVER_ENABLE_CORS=false
 export STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
 
+# Azure-specific environment variables
+export WEBSITES_PORT=${PORT:-8000}
+export WEBSITE_PORT=${PORT:-8000}
+
 # Add Python path
 export PYTHONPATH="${PYTHONPATH}:/home/site/wwwroot"
 

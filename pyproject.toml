@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "meeting-ai-assistant"
+version = "1.0.0"
+description = "Azure-based Meeting AI Assistant"
+
+[tool.azure]
+runtime = "python"
+version = "3.11"
+startup-file = "main.py"

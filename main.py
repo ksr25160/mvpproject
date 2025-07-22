@@ -18,8 +18,11 @@ setup_logger()
 logger = get_logger(__name__)
 
 logger.info(f"Starting Meeting AI Application in {config.environment.value} environment")
+logger.info(f"Python version: {sys.version}")
 logger.info(f"Python path: {sys.path}")
 logger.info(f"Current working directory: {os.getcwd()}")
+logger.info(f"Available environment variables: PORT={os.getenv('PORT')}, WEBSITES_PORT={os.getenv('WEBSITES_PORT')}, WEBSITE_PORT={os.getenv('WEBSITE_PORT')}")
+logger.info(f"Directory contents: {os.listdir('.')}")
 
 def main():
     """메인 애플리케이션 실행"""
@@ -45,10 +48,9 @@ def main():
         streamlit_config = config.get("streamlit", {})
         port = streamlit_config.get("server_port", 8501)
         address = streamlit_config.get("server_address", "0.0.0.0")
-        
-        # Azure App Service에서는 환경변수에서 포트를 가져옴
+          # Azure App Service에서는 환경변수에서 포트를 가져옴
         if config.is_azure():
-            port = int(os.getenv("PORT", os.getenv("WEBSITE_PORT", "8501")))
+            port = int(os.getenv("PORT", os.getenv("WEBSITES_PORT", os.getenv("WEBSITE_PORT", "8000"))))
         
         logger.info(f"Starting Streamlit on {address}:{port}")
         
