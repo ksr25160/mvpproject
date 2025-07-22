@@ -1,9 +1,38 @@
-## ✅ 업무 회의록 요약 및 업무 분배 AI 에이전트
+## ✅ Azure 기반 회의록 요약 및 업무 분배 AI 에이전트
 
 ### 📌 개요 및 목적
 
-업무 회의에서 생성된 **문서·음성 데이터를 AI가 자동으로 분석**해 회의 내용을 요약하고, **액션 아이템별 담당자를 추천**한 후 **중간 책임자의 검토·승인을 거쳐 최종 할당**까지 수행하는 협업 지원 시스템입니다.  
+업무 회의에서 생성된 문서·음성 데이터를 AI가 자동으로 분석해 회의 내용을 요약하고, 액션 아이템별 담당자를 추천한 후 중간 책임자의 검토·승인을 거쳐 최종 할당까지 수행하는 협업 지원 시스템입니다.  
 AI가 1차 안을 만들고 사람이 검토·수정함으로써 AI-Human 협업 기반 의사결정 및 실행 체계를 구현합니다.
+
+---
+
+## 🔧 환경 변수 설정
+
+### 로컬 개발용
+1. `.env.template` 파일을 `.env`로 복사
+2. 실제 Azure 서비스 키 값들로 변경
+
+### Azure Web App 배포용
+환경 변수는 Azure Portal에서 설정해야 합니다:
+
+1. **Azure Portal** > **Web App** > **Settings** > **Configuration**
+2. **Application settings**에서 다음 환경 변수들을 추가:
+
+```
+AZURE_OPENAI_ENDPOINT=https://your-openai-resource.openai.azure.com/
+AZURE_OPENAI_KEY=your_key_here
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_SPEECH_KEY=your_speech_key
+AZURE_SPEECH_REGION=your_region
+AZURE_BLOB_CONNECTION_STRING=your_connection_string
+AZURE_SEARCH_ENDPOINT=https://your-search.search.windows.net
+AZURE_SEARCH_ADMIN_KEY=your_search_key
+COSMOS_ENDPOINT=https://your-cosmos.documents.azure.com:443/
+COSMOS_KEY=your_cosmos_key
+```
+
+⚠️ **중요**: `.env` 파일은 절대 GitHub에 업로드하지 마세요!
 
 ---
 
@@ -32,6 +61,8 @@ AI가 1차 안을 만들고 사람이 검토·수정함으로써 AI-Human 협업
 
 - **Azure Cosmos DB**  
   회의 요약본, 액션 아이템, 승인 이력 저장  
+
+> 제외된 서비스는 데모 단계에서 모두 앱 내 더미·스텁으로 처리하고, 추후 확장 시점에 연동하십시오.
 
 ---
 
