@@ -137,12 +137,17 @@ def setup_logger(app_name: str = "mvp_meeting_ai"):
     )
     
     json_formatter = CustomJsonFormatter()
-    
-    # 1. 콘솔 핸들러 (INFO 이상, 개발 환경에서만)
+      # 1. 콘솔 핸들러 (INFO 이상, 모든 환경에서 에러는 터미널 출력)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(simple_formatter)
     root_logger.addHandler(console_handler)
+    
+    # 2. 에러 전용 콘솔 핸들러 (ERROR 이상만 터미널에 강제 출력)
+    error_console_handler = logging.StreamHandler(sys.stderr)
+    error_console_handler.setLevel(logging.ERROR)
+    error_console_handler.setFormatter(detailed_formatter)
+    root_logger.addHandler(error_console_handler)
     
     # 2. 일반 로그 파일 핸들러 (INFO 이상)
     file_handler = logging.FileHandler(log_file, encoding='utf-8')

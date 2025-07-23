@@ -1,7 +1,7 @@
 # filepath: c:\Users\User\Documents\mvpproject\requirements.txt
 fastapi==0.109.0
 uvicorn==0.27.0
-streamlit==1.31.0
+streamlit>=1.39.0
 openai==1.97.0
 azure-cognitiveservices-speech==1.34.0
 azure-storage-blob==12.19.0

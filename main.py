@@ -36,30 +36,37 @@ if config.is_azure():
             logger.error("App directory does not exist!")
 
 def main():
-    """메인 애플리케이션 실행"""
+    """메인 애플리케이션 실행 - Streamlit과 FastAPI를 통합 실행"""
     try:
-        # Azure 환경에서는 로그 API도 함께 실행
-        if config.is_azure():
+        # API 서버를 백그라운드에서 실행 (Azure 환경에서는 필수, 로컬에서는 선택적)
+        run_api = config.is_azure() or os.getenv("RUN_API", "false").lower() == "true"
+        
+        if run_api:
             import threading
-            from api.log_access_api import app as log_api
+            from api.api import app as rest_api
             import uvicorn
             
-            # 로그 API를 백그라운드에서 실행
-            def run_log_api():
-                uvicorn.run(log_api, host="0.0.0.0", port=8502, log_level="warning")
+            # REST API를 백그라운드에서 실행
+            api_port = 8502 if config.is_azure() else 8000
+            def run_rest_api():
+                uvicorn.run(rest_api, host="0.0.0.0", port=api_port, log_level="info")
             
-            log_api_thread = threading.Thread(target=run_log_api, daemon=True)
-            log_api_thread.start()
-            logger.info("Log Access API started on port 8502")
+            api_thread = threading.Thread(target=run_rest_api, daemon=True)
+            api_thread.start()
+            logger.info(f"Meeting AI REST API started on port {api_port}")
+            print(f"🚀 Meeting AI REST API started on port {api_port}")
+        else:
+            logger.info("API server not started (use RUN_API=true to enable in local development)")
+            print("📝 API server not started (use RUN_API=true to enable in local development)")
         
         # Streamlit 애플리케이션 실행
         logger.info("Starting Streamlit application...")
-        
         # Streamlit 설정
         streamlit_config = config.get("streamlit", {})
         port = streamlit_config.get("server_port", 8501)
         address = streamlit_config.get("server_address", "0.0.0.0")
-          # Azure App Service에서는 환경변수에서 포트를 가져옴
+        
+        # Azure App Service에서는 환경변수에서 포트를 가져옴
         if config.is_azure():
             port = int(os.getenv("PORT", os.getenv("WEBSITES_PORT", os.getenv("WEBSITE_PORT", "8000"))))
         

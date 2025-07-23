@@ -32,6 +32,5 @@ COSMOS_MEETINGS_CONTAINER = os.getenv("COSMOS_MEETINGS_CONTAINER", "meetings")
 COSMOS_ACTION_ITEMS_CONTAINER = os.getenv("COSMOS_ACTION_ITEMS_CONTAINER", "action-items")
 COSMOS_HISTORY_CONTAINER = os.getenv("COSMOS_HISTORY_CONTAINER", "approval-history")
 COSMOS_AUDIT_CONTAINER = os.getenv("COSMOS_AUDIT_CONTAINER", "audit-logs")
-
-# 레거시 SQLite 설정 - 마이그레이션 후 제거 예정
-DB_PATH = os.getenv("DB_PATH", "meetings.db")
+COSMOS_STAFF_CONTAINER = os.getenv("COSMOS_STAFF_CONTAINER", "staff")
+COSMOS_CHAT_HISTORY_CONTAINER = os.getenv("COSMOS_CHAT_HISTORY_CONTAINER", "chat-history")
