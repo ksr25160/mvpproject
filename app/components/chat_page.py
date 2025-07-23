@@ -56,7 +56,9 @@ def render_chatbot(service_manager, fullwidth=False):
     prompt = st.chat_input(
         "메시지를 입력하거나 파일을 첨부하세요...",
         accept_file="multiple",
-        file_type=["mp3", "wav", "mp4", "m4a", "pdf", "txt", "docx"]    )
+        file_type=["mp3", "wav", "mp4", "m4a", "pdf", "txt", "docx"]
+    )
+    
     if prompt:
         # 텍스트 입력 처리
         if prompt.text:

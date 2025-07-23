@@ -9,8 +9,6 @@ from datetime import datetime
 def process_chat_message(user_input, service_manager):
     """채팅 메시지 처리"""
     try:
-        print(f"💬 사용자 질문: {user_input[:50]}...")
-        
         # 사용자 메시지 추가
         st.session_state.chat_messages.append({
             "role": "user",
@@ -19,7 +17,6 @@ def process_chat_message(user_input, service_manager):
         
         # 처리 상태 설정
         st.session_state.processing = True
-        st.rerun()
         
         # 간단한 키워드 기반 응답
         response = ""
@@ -36,16 +33,13 @@ def process_chat_message(user_input, service_manager):
         else:
             # 일반적인 질문은 검색 기반 OpenAI로 처리
             try:
-                print(f"🤖 OpenAI 서비스 호출 시작: {user_input}")
                 response = service_manager.ask_question_with_search(user_input)
-                print(f"✅ OpenAI 응답 완료")
                 
                 # 검색 결과가 없는 경우 기본 도움말 제공
                 if "관련 회의록을 찾을 수 없습니다" in response:
                     response = _handle_general_help()
                     
             except Exception as e:
-                print(f"❌ OpenAI 서비스 오류: {str(e)}")
                 response = _handle_general_help()
         
         # AI 응답 추가
@@ -56,8 +50,6 @@ def process_chat_message(user_input, service_manager):
         
         # 채팅 히스토리에 추가
         add_to_chat_history(user_input, response, service_manager)
-        
-        print(f"✅ 질문 처리 완료")
         
     except Exception as e:
         error_response = f"❌ 질문 처리 중 오류가 발생했습니다: {str(e)}"
@@ -77,8 +69,7 @@ def _handle_meeting_query(user_input, service_manager):
     """회의 관련 질문 처리"""
     meetings = service_manager.get_meetings()
     if meetings:
-        response = f"""
-📝 **회의록 관련 정보**
+        response = f"""📝 **회의록 관련 정보**
 
 현재 저장된 회의록: {len(meetings)}개
 
@@ -111,8 +102,7 @@ def _handle_task_query(user_input, service_manager):
             completed = len([item for item in all_action_items if item.get('status') == '완료'])
             pending = len(all_action_items) - completed
             
-            response = f"""
-✅ **작업 현황**
+            response = f"""✅ **작업 현황**
 
 전체 작업: {len(all_action_items)}개
 완료: {completed}개
@@ -140,8 +130,7 @@ def _handle_search_query(user_input):
         from services.search_service import search_documents
         search_results = search_documents(user_input, top=3)
         if search_results:
-            response = f"""
-🔍 **검색 결과**
+            response = f"""🔍 **검색 결과**
 
 "{user_input}"에 대한 검색 결과:
 
@@ -175,8 +164,7 @@ def _handle_modification_query(user_input, service_manager):
             user_input
         )
         
-        response = f"""
-✅ **자연어 수정 완료**
+        response = f"""✅ **자연어 수정 완료**
 
 **회의:** {target_meeting.get('title', 'N/A')}
 **수정 요청:** {user_input}
@@ -197,10 +185,7 @@ def _handle_staff_query(user_input, service_manager):
         
         if any(keyword in user_input.lower() for keyword in ['목록', 'list', '전체', '모든', '모두']):
             if staff_list:
-                response = f"""
-👥 **직원 목록** ({staff_count}명)
-
-"""
+                response = f"👥 **직원 목록** ({staff_count}명)\n\n"
                 for i, staff in enumerate(staff_list[:5], 1):
                     response += f"{i}. **{staff.get('name', 'N/A')}** ({staff.get('department', 'N/A')})\n"
                     response += f"   └ {staff.get('position', 'N/A')} | {staff.get('email', 'N/A')}\n\n"
@@ -212,8 +197,7 @@ def _handle_staff_query(user_input, service_manager):
             else:
                 response = "👥 등록된 직원이 없습니다. Staff Management에서 직원을 추가해보세요!"
         else:
-            response = f"""
-👥 **인사정보 관리**
+            response = f"""👥 **인사정보 관리**
 
 현재 등록된 직원: **{staff_count}명**
 
@@ -232,8 +216,7 @@ def _handle_staff_query(user_input, service_manager):
 
 def _handle_general_help():
     """일반적인 도움말 응답"""
-    return f"""
-🤖 **Meeting AI Assistant입니다**
+    return f"""🤖 **Meeting AI Assistant입니다**
 
 다음과 같은 기능을 제공합니다:
 
