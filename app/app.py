@@ -105,42 +105,62 @@ def render_sidebar():
                         else:
                             st.error("저장에 실패했습니다.")
                     except Exception as e:
-                        st.error(f"저장 오류: {str(e)}")
-        
-        # 채팅 히스토리 섹션
+                        st.error(f"저장 오류: {str(e)}")        # 채팅 히스토리 섹션
         with st.container():
             st.markdown("**💬 채팅 히스토리**")
             
-            # DB에서 채팅 히스토리 로드
+            # 간단한 검색 기능
+            search_term = st.text_input("🔍 채팅 검색", placeholder="검색어 입력...", key="chat_search")
+            
+            # DB에서 채팅 히스토리 로드 (단일 사용자이므로 모든 히스토리 표시)
             try:
-                current_session_id = st.session_state.get('session_id', 'unknown')
-                db_chat_histories = service_manager.get_chat_histories(session_id=current_session_id, limit=10)
+                with st.spinner("채팅 히스토리 로딩 중..."):
+                    db_chat_histories = service_manager.get_chat_histories(session_id=None, limit=30)
+                
+                # 검색 필터링
+                if search_term and db_chat_histories:
+                    db_chat_histories = [
+                        chat for chat in db_chat_histories 
+                        if search_term.lower() in chat.get('summary', '').lower()
+                    ]
                 
                 if db_chat_histories:
+                    st.caption(f"💬 총 {len(db_chat_histories)}개의 채팅 히스토리")
+                    
                     # DB에서 로드한 채팅 히스토리 표시
                     for i, chat_history in enumerate(db_chat_histories):
-                        timestamp = datetime.fromisoformat(chat_history.get('timestamp', '')).strftime('%m-%d %H:%M') if chat_history.get('timestamp') else '시간 정보 없음'
+                        try:
+                            timestamp = datetime.fromisoformat(chat_history.get('timestamp', '')).strftime('%m-%d %H:%M') if chat_history.get('timestamp') else '시간 정보 없음'
+                        except:
+                            timestamp = '시간 정보 없음'
+                            
                         summary = chat_history.get('summary', '대화 내용 없음')[:30] + "..."
                         message_count = chat_history.get('message_count', 0)
+                        
                         with st.expander(f"🕒 {timestamp} ({message_count}개 메시지)", expanded=False):
                             st.caption(summary)
                             col1, col2 = st.columns(2)
                             with col1:
                                 if st.button("불러오기", key=f"load_db_chat_{i}", use_container_width=True):
-                                    if load_chat_history_from_db(chat_history.get('id'), service_manager):
-                                        st.success("채팅 히스토리를 불러왔습니다!")
-                                        st.rerun()
-                                    else:
-                                        st.error("불러오기에 실패했습니다.")
+                                    with st.spinner("채팅 히스토리 불러오는 중..."):
+                                        if load_chat_history_from_db(chat_history.get('id'), service_manager):
+                                            st.success("채팅 히스토리를 불러왔습니다!")
+                                            st.rerun()
+                                        else:
+                                            st.error("불러오기에 실패했습니다.")
                             with col2:
                                 if st.button("삭제", key=f"delete_db_chat_{i}", use_container_width=True):
-                                    if service_manager.delete_chat_history(chat_history.get('id')):
-                                        st.success("삭제되었습니다!")
-                                        st.rerun()
-                                    else:
-                                        st.error("삭제 실패")
+                                    with st.spinner("삭제 중..."):
+                                        if service_manager.delete_chat_history(chat_history.get('id')):
+                                            st.success("삭제되었습니다!")
+                                            st.rerun()
+                                        else:
+                                            st.error("삭제 실패")
                 else:
-                    st.caption("*아직 채팅 기록이 없습니다*")
+                    if search_term:
+                        st.caption(f"*'{search_term}' 검색 결과가 없습니다*")
+                    else:
+                        st.caption("*아직 채팅 기록이 없습니다*")
                     
             except Exception as e:
                 st.error(f"채팅 히스토리 로드 오류: {str(e)}")

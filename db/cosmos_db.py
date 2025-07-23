@@ -709,6 +709,27 @@ def get_chat_histories(session_id=None, limit=20):
         print(f"❌ 채팅 히스토리 조회 오류: {str(e)}")
         return []
 
+def extract_session_id_from_chat_id(chat_id):
+    """chat_id에서 session_id를 추출합니다.
+    
+    chat_id 형식: chat_SESSION_ID_TIMESTAMP
+    예: chat_a5e0d458-3f40-457d-8a51-e62a796d5d79_20250723_180807
+    """
+    if not chat_id.startswith("chat_"):
+        return None
+    
+    # "chat_" 제거
+    remaining = chat_id[5:]  # "chat_" 길이만큼 제거
+    
+    # 정규식을 사용하여 날짜시간 패턴 매칭 및 제거
+    import re
+    # YYYYMMDD_HHMMSS 패턴을 찾아서 제거
+    datetime_pattern = r'_\d{8}_\d{6}$'
+    session_id = re.sub(datetime_pattern, '', remaining)
+    
+    # 빈 문자열이면 None 반환
+    return session_id if session_id else None
+
 def get_chat_history_by_id(chat_id):
     """특정 채팅 히스토리를 조회합니다."""
     try:
@@ -716,15 +737,51 @@ def get_chat_history_by_id(chat_id):
         db = client.get_database_client(config.COSMOS_DB_NAME)
         container = db.get_container_client(config.COSMOS_CHAT_HISTORY_CONTAINER)
         
-        chat_history = container.read_item(item=chat_id, partition_key=chat_id)
-        print(f"✅ 채팅 히스토리 조회 완료: {chat_id}")
+        # chat_id에서 session_id 추출 (chat_SESSION_ID_TIMESTAMP 형식)
+        session_id = extract_session_id_from_chat_id(chat_id)
+        if not session_id:
+            # 예외 상황: 쿼리로 찾기
+            return get_chat_history_by_query(chat_id)
+        
+        chat_history = container.read_item(item=chat_id, partition_key=session_id)
+        print(f"✅ 채팅 히스토리 조회 완료: {chat_id} (partition_key: {session_id})")
         return chat_history
         
     except exceptions.CosmosResourceNotFoundError:
         print(f"❌ 채팅 히스토리를 찾을 수 없습니다: {chat_id}")
-        return None
+        # 쿼리로 다시 시도
+        return get_chat_history_by_query(chat_id)
     except Exception as e:
         print(f"❌ 채팅 히스토리 조회 오류: {str(e)}")
+        # 쿼리로 다시 시도
+        return get_chat_history_by_query(chat_id)
+
+def get_chat_history_by_query(chat_id):
+    """쿼리를 사용해 채팅 히스토리를 조회합니다 (파티션 키를 모를 때)."""
+    try:
+        client = get_client()
+        db = client.get_database_client(config.COSMOS_DB_NAME)
+        container = db.get_container_client(config.COSMOS_CHAT_HISTORY_CONTAINER)
+        
+        query = "SELECT * FROM c WHERE c.id = @chat_id"
+        parameters = [{"name": "@chat_id", "value": chat_id}]
+        
+        items = list(container.query_items(
+            query=query,
+            parameters=parameters,
+            enable_cross_partition_query=True,
+            max_item_count=1
+        ))
+        
+        if items:
+            print(f"✅ 채팅 히스토리 쿼리 조회 완료: {chat_id}")
+            return items[0]
+        else:
+            print(f"❌ 채팅 히스토리를 찾을 수 없습니다 (쿼리): {chat_id}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ 채팅 히스토리 쿼리 조회 오류: {str(e)}")
         return None
 
 def delete_chat_history(chat_id):
@@ -734,7 +791,18 @@ def delete_chat_history(chat_id):
         db = client.get_database_client(config.COSMOS_DB_NAME)
         container = db.get_container_client(config.COSMOS_CHAT_HISTORY_CONTAINER)
         
-        container.delete_item(item=chat_id, partition_key=chat_id)
+        # chat_id에서 session_id 추출
+        session_id = extract_session_id_from_chat_id(chat_id)
+        if not session_id:
+            # 쿼리로 찾아서 삭제
+            chat_history = get_chat_history_by_query(chat_id)
+            if chat_history:
+                session_id = chat_history.get('session_id')
+            else:
+                print(f"❌ 삭제할 채팅 히스토리를 찾을 수 없습니다: {chat_id}")
+                return False
+        
+        container.delete_item(item=chat_id, partition_key=session_id)
         print(f"✅ 채팅 히스토리 삭제 완료: {chat_id}")
         return True
         
@@ -745,6 +813,27 @@ def delete_chat_history(chat_id):
         print(f"❌ 채팅 히스토리 삭제 오류: {str(e)}")
         return False
 
+def delete_chat_history_by_query(chat_id):
+    """쿼리를 사용해 채팅 히스토리를 찾아서 삭제합니다."""
+    try:
+        # 먼저 문서를 찾아서 session_id 확인
+        chat_history = get_chat_history_by_query(chat_id)
+        if not chat_history:
+            return False
+            
+        client = get_client()
+        db = client.get_database_client(config.COSMOS_DB_NAME)
+        container = db.get_container_client(config.COSMOS_CHAT_HISTORY_CONTAINER)
+        
+        session_id = chat_history.get('session_id')
+        container.delete_item(item=chat_id, partition_key=session_id)
+        print(f"✅ 채팅 히스토리 쿼리 삭제 완료: {chat_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ 채팅 히스토리 쿼리 삭제 오류: {str(e)}")
+        return False
+
 def update_chat_history_summary(chat_id, new_summary):
     """채팅 히스토리 요약을 업데이트합니다."""
     try:
@@ -752,7 +841,16 @@ def update_chat_history_summary(chat_id, new_summary):
         db = client.get_database_client(config.COSMOS_DB_NAME)
         container = db.get_container_client(config.COSMOS_CHAT_HISTORY_CONTAINER)
         
-        chat_history = container.read_item(item=chat_id, partition_key=chat_id)
+        # chat_id에서 session_id 추출
+        session_id = extract_session_id_from_chat_id(chat_id)
+        if not session_id:
+            # 쿼리로 먼저 찾기
+            chat_history = get_chat_history_by_query(chat_id)
+            if not chat_history:
+                return False
+            session_id = chat_history.get('session_id')
+        
+        chat_history = container.read_item(item=chat_id, partition_key=session_id)
         chat_history['summary'] = new_summary
         chat_history['updated_at'] = datetime.now().isoformat()
         
@@ -760,6 +858,18 @@ def update_chat_history_summary(chat_id, new_summary):
         print(f"✅ 채팅 히스토리 요약 업데이트 완료: {chat_id}")
         return True
         
+    except exceptions.CosmosResourceNotFoundError:
+        print(f"❌ 채팅 히스토리를 찾을 수 없습니다: {chat_id}")
+        # 쿼리로 다시 시도
+        chat_history = get_chat_history_by_query(chat_id)
+        if chat_history:
+            chat_history['summary'] = new_summary
+            chat_history['updated_at'] = datetime.now().isoformat()
+            session_id = chat_history.get('session_id')
+            container.replace_item(item=chat_id, body=chat_history)
+            print(f"✅ 채팅 히스토리 요약 업데이트 완료 (쿼리): {chat_id}")
+            return True
+        return False
     except Exception as e:
         print(f"❌ 채팅 히스토리 요약 업데이트 오류: {str(e)}")
         return False
