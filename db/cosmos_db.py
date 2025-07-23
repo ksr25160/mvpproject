@@ -1168,3 +1168,125 @@ def update_chat_history_summary(chat_id, new_summary):
     except Exception as e:
         print(f"❌ 채팅 히스토리 요약 업데이트 오류: {str(e)}")
         return False
+
+
+def add_new_action_item(
+    task_description, assignee_name=None, due_date=None, meeting_id=None
+):
+    """새로운 액션 아이템을 추가합니다."""
+    try:
+        client = get_client()
+        db = client.get_database_client(config.COSMOS_DB_NAME)
+        container = db.get_container_client(config.COSMOS_ACTION_ITEMS_CONTAINER)
+
+        # 기본 회의 ID 설정 (독립 작업용)
+        if not meeting_id:
+            meeting_id = "standalone_task"
+
+        # 고유한 아이템 ID 생성
+        import uuid
+
+        item_id = f"item_{meeting_id}_{uuid.uuid4().hex[:8]}"
+
+        # 담당자 추천 (이름이 제공되지 않은 경우)
+        if not assignee_name and task_description:
+            try:
+                # RAG 기반 담당자 추천 시도
+                recommended_staff = recommend_assignee_for_task(task_description)
+                if recommended_staff:
+                    assignee_name = recommended_staff.get("name", "미할당")
+                else:
+                    assignee_name = "미할당"
+            except Exception as e:
+                logger.warning(f"담당자 추천 실패: {e}")
+                assignee_name = "미할당"
+
+        # 마감일 기본값 설정
+        if not due_date:
+            from datetime import datetime, timedelta
+
+            due_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+
+        # 액션 아이템 생성
+        action_item = {
+            "id": item_id,
+            "meetingId": meeting_id,
+            "description": task_description,
+            "recommendedAssigneeId": assignee_name,
+            "dueDate": due_date,
+            "finalAssigneeId": assignee_name,  # 바로 할당
+            "approved": True,  # 직접 추가된 것은 바로 승인
+            "status": "미시작",
+            "created_at": datetime.utcnow().isoformat(),
+            "priority": "보통",
+            "type": "standalone",  # 독립 작업 표시
+        }
+
+        container.create_item(body=action_item)
+
+        log_business_event(
+            logger,
+            "action_item_added",
+            f"새로운 작업 추가: {task_description[:50]} (ID: {item_id})",
+        )
+
+        print(f"✅ 새로운 액션 아이템 추가 완료: {item_id}")
+        return item_id
+
+    except Exception as e:
+        logger.error(f"새로운 액션 아이템 추가 실패: {e}")
+        print(f"❌ 새로운 액션 아이템 추가 실패: {e}")
+        return None
+
+
+def find_staff_by_name(name):
+    """이름으로 직원 찾기"""
+    try:
+        all_staff = get_all_staff()
+        for staff in all_staff:
+            if staff.get("name", "").lower() == name.lower():
+                return staff
+        return None
+    except Exception as e:
+        print(f"❌ 직원 검색 오류: {str(e)}")
+        return None
+
+
+def update_action_item_assignee(
+    item_id: str, meeting_id: str, assignee_name: str
+) -> bool:
+    """액션 아이템의 담당자 업데이트"""
+    try:
+        client = get_client()
+        db = client.get_database_client(config.COSMOS_DB_NAME)
+        container = db.get_container_client("action-items")
+
+        # 기존 항목 조회
+        try:
+            existing_item = container.read_item(item=item_id, partition_key=meeting_id)
+        except exceptions.CosmosResourceNotFoundError:
+            print(f"❌ 액션 아이템을 찾을 수 없습니다: {item_id}")
+            return False
+
+        # 담당자 정보 업데이트
+        existing_item["recommendedAssigneeId"] = assignee_name
+        existing_item["finalAssigneeId"] = assignee_name
+        existing_item["approved"] = True
+        existing_item["updated_at"] = datetime.utcnow().isoformat()
+
+        # 업데이트 실행
+        container.replace_item(item=item_id, body=existing_item)
+
+        log_business_event(
+            logger,
+            "assignee_updated",
+            f"담당자 변경: {existing_item.get('description', 'N/A')[:30]} → {assignee_name} (ID: {item_id})",
+        )
+
+        print(f"✅ 담당자 업데이트 완료: {item_id} → {assignee_name}")
+        return True
+
+    except Exception as e:
+        logger.error(f"담당자 업데이트 실패: {e}")
+        print(f"❌ 담당자 업데이트 실패: {e}")
+        return False

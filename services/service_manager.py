@@ -45,6 +45,8 @@ from db.cosmos_db import (
     get_chat_history_by_id,
     delete_chat_history,
     update_chat_history_summary,
+    add_new_action_item,
+    find_staff_by_name,
 )
 
 
@@ -194,6 +196,35 @@ class ServiceManager:
         from db.cosmos_db import update_chat_history_summary
 
         return update_chat_history_summary(chat_id, new_summary)
+
+    # 새로운 액션 아이템 관리 기능
+    def add_new_action_item(
+        self,
+        task_description: str,
+        assignee_name: str = None,
+        due_date: str = None,
+        meeting_id: str = None,
+    ) -> str:
+        """새로운 액션 아이템 추가"""
+        return add_new_action_item(
+            task_description, assignee_name, due_date, meeting_id
+        )
+
+    def find_staff_by_name(self, name: str) -> dict:
+        """이름으로 직원 찾기"""
+        return find_staff_by_name(name)
+
+    def update_action_item_assignee(
+        self, item_id: str, meeting_id: str, assignee_name: str
+    ) -> bool:
+        """액션 아이템의 담당자 업데이트"""
+        try:
+            from db.cosmos_db import update_action_item_assignee
+
+            return update_action_item_assignee(item_id, meeting_id, assignee_name)
+        except Exception as e:
+            print(f"❌ 담당자 업데이트 실패: {e}")
+            return False
 
     # RAG 기반 담당자 추천
     def index_staff_data_for_search(self) -> bool:

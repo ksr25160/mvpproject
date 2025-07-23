@@ -17,24 +17,44 @@ def process_chat_message(user_input, service_manager):
         # 처리 상태 설정
         st.session_state.processing = True
 
-        # 간단한 키워드 기반 응답
+        # 간단한 키워드 기반 응답 (더 구체적인 키워드부터 체크)
         response = ""
-        if any(keyword in user_input.lower() for keyword in ["회의", "미팅", "회의록"]):
+
+        # 미할당 관련 키워드 우선 체크
+        if any(
+            keyword in user_input.lower()
+            for keyword in ["미할당", "unassigned", "담당자 없는"]
+        ):
+            response = _handle_staff_query(user_input, service_manager)
+        # 담당자 지정 관련 키워드 체크
+        elif (
+            any(keyword in user_input.lower() for keyword in ["지정", "할당", "assign"])
+            and "담당자" in user_input.lower()
+        ):
+            response = _handle_staff_query(user_input, service_manager)
+        # 회의 관련 키워드
+        elif any(
+            keyword in user_input.lower() for keyword in ["회의", "미팅", "회의록"]
+        ):
             response = _handle_meeting_query(user_input, service_manager)
+        # 작업 관련 키워드
         elif any(
             keyword in user_input.lower()
             for keyword in ["작업", "업무", "할일", "todo", "task"]
         ):
             response = _handle_task_query(user_input, service_manager)
+        # 검색 관련 키워드
         elif any(
             keyword in user_input.lower() for keyword in ["검색", "search", "찾기"]
         ):
             response = _handle_search_query(user_input)
+        # 수정 관련 키워드
         elif any(
             keyword in user_input.lower()
             for keyword in ["수정", "변경", "업데이트", "modify", "update", "change"]
         ):
             response = _handle_modification_query(user_input, service_manager)
+        # 직원 관련 키워드
         elif any(
             keyword in user_input.lower()
             for keyword in ["직원", "인사", "사람", "staff", "담당자", "추천"]
@@ -60,6 +80,8 @@ def process_chat_message(user_input, service_manager):
         # 채팅 히스토리에 추가
         add_to_chat_history(user_input, response, service_manager)
 
+        return response  # 응답 반환 추가
+
     except Exception as e:
         error_response = f"❌ 질문 처리 중 오류가 발생했습니다: {str(e)}"
         print(f"❌ 질문 처리 오류: {str(e)}")
@@ -67,6 +89,8 @@ def process_chat_message(user_input, service_manager):
         st.session_state.chat_messages.append(
             {"role": "assistant", "content": error_response}
         )
+
+        return error_response  # 오류 응답도 반환
 
     finally:
         # 처리 상태 해제
@@ -100,38 +124,264 @@ def _handle_meeting_query(user_input, service_manager):
 def _handle_task_query(user_input, service_manager):
     """작업 관련 질문 처리"""
     try:
-        meetings = service_manager.get_meetings()
-        all_action_items = []
-        for meeting in meetings:
-            meeting_id = meeting.get("id")
-            if meeting_id:
-                action_items = service_manager.get_action_items(meeting_id)
-                all_action_items.extend(action_items)
+        # 새로운 작업 추가 요청 인식
+        if any(
+            keyword in user_input.lower()
+            for keyword in ["추가", "새로운", "만들", "생성", "add", "create", "new"]
+        ):
+            return _handle_task_creation(user_input, service_manager)
 
-        if all_action_items:
-            completed = len(
-                [item for item in all_action_items if item.get("status") == "완료"]
-            )
-            pending = len(all_action_items) - completed
+        # 작업 상태 변경 요청 인식
+        elif any(
+            keyword in user_input.lower()
+            for keyword in [
+                "완료",
+                "변경",
+                "상태",
+                "수정",
+                "complete",
+                "change",
+                "update",
+            ]
+        ):
+            return _handle_task_status_update(user_input, service_manager)
 
-            response = f"""✅ **작업 현황**
+        # 기존 작업 조회 기능
+        else:
+            meetings = service_manager.get_meetings()
+            all_action_items = []
+            unassigned_count = 0
+
+            for meeting in meetings:
+                meeting_id = meeting.get("id")
+                if meeting_id:
+                    action_items = service_manager.get_action_items(meeting_id)
+                    for item in action_items:
+                        # 미할당 카운트
+                        assignee = item.get("recommendedAssigneeId") or item.get(
+                            "assignee"
+                        )
+                        if not assignee or assignee.lower() in [
+                            "미할당",
+                            "unassigned",
+                            "",
+                            "없음",
+                        ]:
+                            unassigned_count += 1
+                        all_action_items.append(item)
+
+            if all_action_items:
+                completed = len(
+                    [item for item in all_action_items if item.get("status") == "완료"]
+                )
+                pending = len(all_action_items) - completed
+
+                response = f"""✅ **작업 현황**
 
 전체 작업: {len(all_action_items)}개
 완료: {completed}개
 대기중: {pending}개
+미할당: {unassigned_count}개
 
 최근 작업:
 """
-            for i, task in enumerate(all_action_items[:3], 1):
-                status = "✅" if task.get("status") == "완료" else "⏳"
-                response += f"\n{i}. {status} {task.get('description', 'N/A')}"
+                for i, task in enumerate(all_action_items[:5], 1):
+                    status = "✅" if task.get("status") == "완료" else "⏳"
+                    assignee = (
+                        task.get("recommendedAssigneeId")
+                        or task.get("assignee")
+                        or "미할당"
+                    )
+                    response += f"{i}. {status} **{task.get('description', 'N/A')}**\n"
+                    response += f"   └ 담당자: {assignee}\n\n"
 
-            response += "\n\n📋 Task Management 페이지에서 자세한 관리가 가능합니다."
-        else:
-            response = "✅ 등록된 작업이 없습니다. 회의를 분석하면 자동으로 액션 아이템이 생성됩니다!"
+                if unassigned_count > 0:
+                    response += f"💡 '미할당 작업 보여줘' 명령으로 미할당 작업을 확인할 수 있습니다.\n"
+
+                response += "📋 Task Management 페이지에서 자세한 내용을 확인하세요."
+            else:
+                response = "✅ 등록된 작업이 없습니다. 회의를 분석하면 자동으로 액션 아이템이 생성됩니다!"
 
     except Exception as e:
         response = f"❌ 작업 정보를 가져오는 중 오류가 발생했습니다: {str(e)}"
+
+    return response
+
+
+def _handle_task_creation(user_input, service_manager):
+    """새로운 작업 추가 처리"""
+    try:
+        import re
+        from datetime import datetime, timedelta
+
+        # 작업 설명 추출
+        task_description = ""
+        assignee_name = None
+        due_date = None
+
+        # 정규식으로 패턴 매칭
+        # "새로운 작업 추가해줘: 데이터베이스 백업, 담당자는 한성민, 마감일은 내일"
+
+        # 작업 내용 추출
+        task_patterns = [
+            r"추가해줘:?\s*([^,]+)",
+            r"작업:?\s*([^,]+)",
+            r"업무:?\s*([^,]+)",
+            r"할일:?\s*([^,]+)",
+        ]
+
+        for pattern in task_patterns:
+            match = re.search(pattern, user_input)
+            if match:
+                task_description = match.group(1).strip()
+                break
+
+        # 담당자 추출
+        assignee_patterns = [
+            r"담당자(?:는|는)?\s*([^,\s]+)",
+            r"담당자:?\s*([^,\s]+)",
+            r"assignee:?\s*([^,\s]+)",
+        ]
+
+        for pattern in assignee_patterns:
+            match = re.search(pattern, user_input)
+            if match:
+                assignee_name = match.group(1).strip()
+                break
+
+        # 마감일 추출
+        if "내일" in user_input:
+            due_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        elif "모레" in user_input:
+            due_date = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
+        elif "다음주" in user_input:
+            due_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        else:
+            # 날짜 패턴 추출 시도
+            date_patterns = [
+                r"마감일(?:은|는)?\s*(\d{4}-\d{2}-\d{2})",
+                r"(\d{1,2}/\d{1,2})",
+                r"(\d{1,2}월\s*\d{1,2}일)",
+            ]
+
+            for pattern in date_patterns:
+                match = re.search(pattern, user_input)
+                if match:
+                    date_str = match.group(1)
+                    # 간단한 날짜 변환 (실제로는 더 정교한 파싱 필요)
+                    try:
+                        if "/" in date_str:
+                            month, day = date_str.split("/")
+                            current_year = datetime.now().year
+                            due_date = f"{current_year}-{int(month):02d}-{int(day):02d}"
+                        # 다른 형식들도 필요에 따라 추가
+                    except:
+                        pass
+                    break
+
+        # 작업 설명이 없으면 오류
+        if not task_description:
+            return "❌ 작업 내용을 명확히 입력해주세요.\n예시: '새로운 작업 추가해줘: 데이터베이스 백업, 담당자는 한성민, 마감일은 내일'"
+
+        # 담당자 이름이 있으면 유효성 확인
+        if assignee_name:
+            staff = service_manager.find_staff_by_name(assignee_name)
+            if not staff:
+                # 담당자를 찾을 수 없으면 추천 시스템 사용
+                recommended_staff = service_manager.recommend_assignee_for_task(
+                    task_description
+                )
+                if recommended_staff:
+                    assignee_name = recommended_staff.get("name", "미할당")
+                else:
+                    assignee_name = "미할당"
+
+        # 새로운 액션 아이템 추가
+        item_id = service_manager.add_new_action_item(
+            task_description, assignee_name, due_date
+        )
+
+        if item_id:
+            response = f"""✅ **새로운 작업이 추가되었습니다!**
+
+📋 **작업 내용**: {task_description}
+👤 **담당자**: {assignee_name or '미할당'}
+📅 **마감일**: {due_date or '1주일 후'}
+🆔 **작업 ID**: {item_id}
+
+📋 Task Management 페이지에서 자세한 관리가 가능합니다."""
+        else:
+            response = "❌ 작업 추가 중 오류가 발생했습니다."
+
+    except Exception as e:
+        response = f"❌ 작업 추가 중 오류가 발생했습니다: {str(e)}"
+
+    return response
+
+
+def _handle_task_status_update(user_input, service_manager):
+    """작업 상태 업데이트 처리"""
+    try:
+        # 모든 액션 아이템 조회
+        all_action_items = service_manager.get_all_action_items()
+
+        if not all_action_items:
+            return "❌ 업데이트할 작업이 없습니다."
+
+        # 간단한 키워드 매칭으로 작업 찾기
+        user_input_lower = user_input.lower()
+        matched_items = []
+
+        for item in all_action_items:
+            description = item.get("description", "").lower()
+            assignee = item.get("recommendedAssigneeId", "").lower()
+
+            # 작업 설명이나 담당자가 사용자 입력에 포함되어 있으면 매칭
+            if any(
+                word in description
+                for word in user_input_lower.split()
+                if len(word) > 2
+            ):
+                matched_items.append(item)
+            elif assignee and assignee in user_input_lower:
+                matched_items.append(item)
+
+        if not matched_items:
+            return (
+                f"❌ 해당하는 작업을 찾을 수 없습니다.\n\n현재 작업 목록:\n"
+                + "\n".join(
+                    [
+                        f"- {item.get('description', 'N/A')}"
+                        for item in all_action_items[:5]
+                    ]
+                )
+            )
+
+        # 첫 번째 매칭된 항목 업데이트
+        item = matched_items[0]
+        item_id = item.get("id")
+        meeting_id = item.get("meetingId")
+
+        # 상태 결정
+        new_status = "완료" if "완료" in user_input_lower else "진행중"
+
+        # 상태 업데이트
+        try:
+            service_manager.update_action_item_status(item_id, meeting_id, new_status)
+
+            response = f"""✅ **작업 상태가 업데이트되었습니다!**
+
+📋 **작업**: {item.get('description', 'N/A')}
+👤 **담당자**: {item.get('recommendedAssigneeId', 'N/A')}
+🔄 **상태**: {item.get('status', '미시작')} → {new_status}
+
+📋 Task Management 페이지에서 확인하세요."""
+
+        except Exception as e:
+            response = f"❌ 작업 상태 업데이트 실패: {str(e)}"
+
+    except Exception as e:
+        response = f"❌ 작업 상태 업데이트 중 오류가 발생했습니다: {str(e)}"
 
     return response
 
@@ -203,22 +453,101 @@ def _handle_staff_query(user_input, service_manager):
         staff_list = service_manager.get_all_staff()
         staff_count = len(staff_list)
 
+        # 미할당 작업 조회 (가장 먼저 체크)
         if any(
+            keyword in user_input.lower()
+            for keyword in ["미할당", "unassigned", "담당자 없는"]
+        ):
+            return _handle_unassigned_tasks_query(user_input, service_manager)
+
+        # 담당자 지정 요청 처리 (두 번째로 체크)
+        elif (
+            any(keyword in user_input.lower() for keyword in ["지정", "할당", "assign"])
+            and "담당자" in user_input.lower()
+        ):
+            return _handle_assignee_assignment(user_input, service_manager)
+
+        # 부서별 직원 조회
+        elif any(
+            dept in user_input.lower()
+            for dept in ["개발팀", "개발", "dev", "마케팅", "디자인", "인프라", "영업"]
+        ):
+            department = None
+            if "개발" in user_input.lower():
+                department = "개발팀"
+            elif "마케팅" in user_input.lower():
+                department = "마케팅팀"
+            elif "디자인" in user_input.lower():
+                department = "디자인팀"
+            elif "인프라" in user_input.lower():
+                department = "인프라팀"
+            elif "영업" in user_input.lower():
+                department = "영업팀"
+
+            if department:
+                dept_staff = [
+                    staff
+                    for staff in staff_list
+                    if staff.get("department") == department
+                ]
+                if dept_staff:
+                    response = f"👥 **{department} 직원** ({len(dept_staff)}명)\n\n"
+                    for i, staff in enumerate(dept_staff, 1):
+                        skills = staff.get("skills", [])
+                        skill_text = (
+                            ", ".join(skills[:3]) if skills else "스킬 정보 없음"
+                        )
+                        response += f"{i}. **{staff.get('name', 'N/A')}** ({staff.get('position', 'N/A')})\n"
+                        response += f"   └ 스킬: {skill_text}\n\n"
+                    return response
+                else:
+                    return f"❌ {department}에 등록된 직원이 없습니다."
+
+        # 전체 직원 목록 조회
+        elif any(
             keyword in user_input.lower()
             for keyword in ["목록", "list", "전체", "모든", "모두"]
         ):
             if staff_list:
                 response = f"👥 **직원 목록** ({staff_count}명)\n\n"
-                for i, staff in enumerate(staff_list[:5], 1):
+                for i, staff in enumerate(staff_list[:8], 1):
                     response += f"{i}. **{staff.get('name', 'N/A')}** ({staff.get('department', 'N/A')})\n"
                     response += f"   └ {staff.get('position', 'N/A')} | {staff.get('email', 'N/A')}\n\n"
 
-                if len(staff_list) > 5:
-                    response += f"... 외 {len(staff_list) - 5}명\n\n"
+                if len(staff_list) > 8:
+                    response += f"... 외 {len(staff_list) - 8}명\n\n"
 
                 response += "📋 Staff Management 페이지에서 상세 정보를 확인하고 관리할 수 있습니다."
+                return response
             else:
-                response = "👥 등록된 직원이 없습니다. Staff Management에서 직원을 추가해보세요!"
+                return "👥 등록된 직원이 없습니다. Staff Management에서 직원을 추가해보세요!"
+
+        # 담당자 추천 요청
+        elif any(
+            keyword in user_input.lower()
+            for keyword in ["추천", "recommend", "적합한", "맞는"]
+        ):
+            # 작업 키워드 추출
+            task_keywords = user_input.lower()
+            recommended_staff = service_manager.recommend_assignee_for_task(
+                task_keywords
+            )
+            if recommended_staff:
+                response = f"""🎯 **담당자 추천**
+
+**추천 담당자**: {recommended_staff.get('name', 'N/A')}
+**부서**: {recommended_staff.get('department', 'N/A')}
+**직급**: {recommended_staff.get('position', 'N/A')}
+**관련 스킬**: {', '.join(recommended_staff.get('skills', [])[:3])}
+
+💡 이 담당자가 해당 작업에 적합합니다."""
+                return response
+            else:
+                return (
+                    "❌ 적합한 담당자를 찾을 수 없습니다. 다른 키워드로 시도해보세요."
+                )
+
+        # 기본 도움말
         else:
             response = f"""👥 **인사정보 관리**
 
@@ -227,15 +556,17 @@ def _handle_staff_query(user_input, service_manager):
 **사용 가능한 명령어:**
 • "직원 목록 보여줘" - 전체 직원 목록 조회
 • "개발팀 직원 찾아줘" - 특정 부서 직원 검색  
-• "개발 담당자 추천해줘" - 작업에 적합한 담당자 추천
+• "UI 디자인 담당자 추천해줘" - 작업에 적합한 담당자 추천
+• "미할당 작업 보여줘" - 담당자가 없는 작업 조회
+• "[작업명] 담당자를 [이름]으로 지정해줘" - 담당자 지정
 
 📋 Staff Management 페이지에서 직원 정보를 추가/수정/삭제할 수 있습니다.
 """
+            return response
 
     except Exception as e:
         response = f"❌ 인사정보 조회 중 오류가 발생했습니다: {str(e)}"
-
-    return response
+        return response
 
 
 def _handle_general_help():
@@ -362,3 +693,157 @@ def load_chat_history_from_db(chat_id, service_manager):
     except Exception as e:
         print(f"❌ 채팅 히스토리 로드 오류: {str(e)}")
     return False
+
+
+def _handle_unassigned_tasks_query(user_input, service_manager):
+    """미할당 작업 조회 처리"""
+    try:
+        # 모든 회의에서 액션 아이템 수집
+        meetings = service_manager.get_meetings()
+        unassigned_tasks = []
+
+        for meeting in meetings:
+            meeting_id = meeting.get("id")
+            if meeting_id:
+                action_items = service_manager.get_action_items(meeting_id)
+                for item in action_items:
+                    assignee = item.get("recommendedAssigneeId") or item.get("assignee")
+                    if not assignee or assignee.lower() in [
+                        "미할당",
+                        "unassigned",
+                        "",
+                        "없음",
+                    ]:
+                        unassigned_tasks.append(
+                            {
+                                **item,
+                                "meeting_title": meeting.get(
+                                    "title", "Unknown Meeting"
+                                ),
+                            }
+                        )
+
+        if unassigned_tasks:
+            response = f"📋 **미할당 작업** ({len(unassigned_tasks)}개)\n\n"
+            for i, task in enumerate(unassigned_tasks, 1):
+                status_icon = "⏳" if task.get("status") != "완료" else "✅"
+                response += f"{i}. {status_icon} **{task.get('description', 'N/A')}**\n"
+                response += f"   └ 회의: {task.get('meeting_title', 'N/A')}\n"
+                if task.get("dueDate"):
+                    response += f"   └ 마감일: {task.get('dueDate')}\n"
+                response += "\n"
+
+            response += "💡 '작업명 담당자를 이름으로 지정해줘' 명령으로 담당자를 지정할 수 있습니다."
+            return response
+        else:
+            return "✅ 모든 작업에 담당자가 할당되어 있습니다!"
+
+    except Exception as e:
+        return f"❌ 미할당 작업 조회 중 오류가 발생했습니다: {str(e)}"
+
+
+def _handle_assignee_assignment(user_input, service_manager):
+    """담당자 지정 처리"""
+    try:
+        # 담당자 지정 패턴 매칭
+        # 예: "데이터베이스 백업 담당자를 한성민으로 지정해줘"
+        # 예: "UI 디자인 담당자를 장윤서로 변경해줘"
+
+        assignment_patterns = [
+            r"(.+?)\s*담당자를\s*(.+?)(?:으로|로)\s*(?:지정|할당|변경)",
+            r"(.+?)\s*(?:의\s*)?담당자\s*(?:를\s*)?(.+?)(?:으로|로)\s*(?:지정|할당|변경)",
+            r"assign\s+(.+?)\s+to\s+(.+)",
+        ]
+
+        task_name = None
+        assignee_name = None
+
+        for pattern in assignment_patterns:
+            match = re.search(pattern, user_input, re.IGNORECASE)
+            if match:
+                task_name = match.group(1).strip()
+                assignee_name = match.group(2).strip()
+                break
+
+        if not task_name or not assignee_name:
+            return """❌ 담당자 지정 형식이 올바르지 않습니다.
+
+**올바른 형식:**
+• "[작업명] 담당자를 [이름]으로 지정해줘"
+• "[작업명] 담당자를 [이름]으로 변경해줘"
+
+**예시:**
+• "데이터베이스 백업 담당자를 한성민으로 지정해줘"
+• "UI 디자인 담당자를 장윤서로 변경해줘"
+"""
+
+        # 담당자 이름 유효성 확인
+        staff = service_manager.find_staff_by_name(assignee_name)
+        if not staff:
+            # 비슷한 이름 찾기
+            all_staff = service_manager.get_all_staff()
+            staff_names = [s.get("name", "") for s in all_staff]
+            similar_names = [
+                name
+                for name in staff_names
+                if assignee_name in name or name in assignee_name
+            ]
+
+            suggestion = ""
+            if similar_names:
+                suggestion = f"\n\n💡 혹시 다음 중 하나인가요?\n" + "\n".join(
+                    [f"• {name}" for name in similar_names[:3]]
+                )
+
+            return f"❌ '{assignee_name}' 직원을 찾을 수 없습니다.{suggestion}"
+
+        # 해당 작업 찾기
+        meetings = service_manager.get_meetings()
+        matched_tasks = []
+
+        for meeting in meetings:
+            meeting_id = meeting.get("id")
+            if meeting_id:
+                action_items = service_manager.get_action_items(meeting_id)
+                for item in action_items:
+                    item_desc = item.get("description", "").lower()
+                    if task_name.lower() in item_desc:
+                        matched_tasks.append(
+                            {
+                                **item,
+                                "meeting_id": meeting_id,
+                                "meeting_title": meeting.get(
+                                    "title", "Unknown Meeting"
+                                ),
+                            }
+                        )
+
+        if not matched_tasks:
+            return f"❌ '{task_name}' 작업을 찾을 수 없습니다.\n\n💡 '미할당 작업 보여줘' 명령으로 전체 작업 목록을 확인해보세요."
+
+        # 첫 번째 매칭된 작업에 담당자 지정
+        task = matched_tasks[0]
+        task_id = task.get("id")
+        meeting_id = task.get("meeting_id")
+
+        # 담당자 업데이트
+        success = service_manager.update_action_item_assignee(
+            task_id, meeting_id, staff.get("name")
+        )
+
+        if success:
+            response = f"""✅ **담당자가 지정되었습니다!**
+
+📋 **작업**: {task.get('description', 'N/A')}
+👤 **담당자**: {staff.get('name', 'N/A')} ({staff.get('department', 'N/A')})
+📅 **마감일**: {task.get('dueDate', '미정')}
+🔄 **상태**: {task.get('status', '미시작')}
+
+📋 Task Management 페이지에서 확인하세요."""
+        else:
+            response = "❌ 담당자 지정에 실패했습니다. 다시 시도해주세요."
+
+        return response
+
+    except Exception as e:
+        return f"❌ 담당자 지정 중 오류가 발생했습니다: {str(e)}"
